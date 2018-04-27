@@ -47,6 +47,9 @@ public class DownloadController {
     @Value("${downloader.files.downloadDirectory:/tmp}")
     private File fileDownloadDirectory;
 
+    @Value("${downloader.files.noStoreFiles:false}")
+    private boolean noStoreFiles;
+
     @GET
     public void downloadFile(@Context HttpHeaders httpHeaders, @Suspended final AsyncResponse asyncResponse, @QueryParam("url") String url) throws Exception {
         OkHttpClient client = new OkHttpClient.Builder().build();
@@ -65,20 +68,24 @@ public class DownloadController {
 
         Request request = requestBuilder.build();
 
-        if (!fileDownloadDirectory.exists()) {
+        if (!fileDownloadDirectory.exists() && !noStoreFiles) {
             asyncResponse.resume(new FileNotFoundException());
             return;
         }
 
         File tempFile = null;
-        try {
-            tempFile = Files.createFile(
-                    Paths.get(fileDownloadDirectory.getPath(), MessageFormat.format("{0}_{1}", filePrefix, UUID.randomUUID()
-                                                                                                               .toString()))
-            ).toFile();
-        } catch (Exception e) {
-            log.error("Error while creating temp file", e);
-            asyncResponse.resume(e);
+        if (noStoreFiles) {
+            tempFile = Paths.get("/dev/null").toFile();
+        } else {
+            try {
+                tempFile = Files.createFile(
+                        Paths.get(fileDownloadDirectory.getPath(), MessageFormat.format("{0}_{1}", filePrefix, UUID.randomUUID()
+                                                                                                                   .toString()))
+                ).toFile();
+            } catch (Exception e) {
+                log.error("Error while creating temp file", e);
+                asyncResponse.resume(e);
+            }
         }
 
         okhttp3.Response response = client.newCall(request).execute();
